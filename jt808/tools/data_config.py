@@ -1,18 +1,22 @@
 import multiprocessing
-from jt808.tools.get_data import GetData
 import time
+from jt808.tools.base_path import BasePath
+from jt808.tools.get_data import GetData
 
-PATH_DATA = './config/data.ini'
+Path = BasePath()
+
+# data.ini
+PATH_DATA = Path.base_dir / 'config/data.ini'
 data = GetData(PATH_DATA)
 
 # 车辆信息文件路径
-PATH_CAR = data.car_path
+PATH_CAR = Path.joinPath(data.car_path)
 
 # GPS文件路径
-PATH_GPS = data.gps_path
+PATH_GPS = Path.joinPath(data.gps_path)
 
 # Log文件路径
-PATH_LOG = './config/log.ini'
+PATH_LOG = Path.base_dir / 'config/log.ini'
 
 # -----------基础信息----------- #
 VEHICLE = ''
@@ -61,22 +65,24 @@ CAR_STATE = data.gps_append_CAR_STATE
 SIGN = '32323333323030190924175400000100'
 # 报警标识附件数量
 ATTACH_SIGN = data.gps_append_ATTACH_SIGN  # 表示该报警对应的附件数量
-
+# ATTACH_SIGN = 1
 # ----------- 报警附件信息消息数据----------- #
-MSG_TYPE = data.gps_attachment_MSG_TYPE  # 信息类型0x00：正常报警文件信息 0x01：补传报警文件信息
+MSG_TYPE = (data.gps_attachment_MSG_TYPE)  # 信息类型0x00：正常报警文件信息 0x01：补传报警文件信息
 # 文件类型  0x00：图片 0x01：音频 0x02：视频 0x03：文本 0x04：其它
 ATTACH_TYPE = data.gps_attachment_type0
-ATTACH_PATH = data.gps_attachment_path0
+ATTACH_PATH = Path.joinPath(data.gps_attachment_path0)
 
 # 文件类型  0x00：图片 0x01：音频 0x02：视频 0x03：文本 0x04：其它
 ATTACH_TYPE_01 = data.gps_attachment_type1
-ATTACH_PATH_01 = data.gps_attachment_path1
+ATTACH_PATH_01 = Path.joinPath(data.gps_attachment_path1)
+# ATTACH_TYPE_01 = ''
+# ATTACH_PATH_01 = ''
 # 文件类型  0x00：图片 0x01：音频 0x02：视频 0x03：文本 0x04：其它
 ATTACH_TYPE_02 = data.gps_attachment_type2
-ATTACH_PATH_02 = data.gps_attachment_path2
+ATTACH_PATH_02 = Path.joinPath(data.gps_attachment_path2)
 # 文件类型  0x00：图片 0x01：音频 0x02：视频 0x03：文本 0x04：其它
 ATTACH_TYPE_03 = data.gps_attachment_type3
-ATTACH_PATH_03 = data.gps_attachment_path3
+ATTACH_PATH_03 = Path.joinPath(data.gps_attachment_path3)
 
 # -----------高级驾驶辅助报警信息----------- #
 # 报警 ID
@@ -118,7 +124,6 @@ TIRE_PRESSURE = ['0' for tp in range(92)]
 
 # ----------- 盲区监测系统报警信息----------- #
 BLIND_AREA = ['0' for ba in range(74)]
-
 
 # -----------GUI信息----------- #
 START_TIME = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())

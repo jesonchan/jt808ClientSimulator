@@ -2,6 +2,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import threading
 import configparser
+from jt808.tools.base_path import BasePath
 
 
 class Log(object):
@@ -11,13 +12,15 @@ class Log(object):
 
     def __new__(cls, log_config):
         mutex = threading.Lock()
+        path = BasePath()
         mutex.acquire()  # 上锁，防止多线程下出问题
 
         if not hasattr(cls, 'instance'):
             cls.instance = super(Log, cls).__new__(cls)
             config = configparser.ConfigParser()
             config.read(log_config, encoding='UTF-8')
-            cls.instance.log_filename = config.get('LOGGING', 'log_file')
+            log_filepath = config.get('LOGGING', 'log_file')
+            cls.instance.log_filename = path.joinPath(log_filepath)
             cls.instance.max_bytes_each = int(
                 config.get('LOGGING', 'max_bytes_each'))
             cls.instance.backup_count = int(
