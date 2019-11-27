@@ -33,7 +33,8 @@ class ExcelData:
                                 table_gps.row_values(each)[1],
                                 int(table_gps.row_values(each)[2]),
                                 int(table_gps.row_values(each)[3]),
-                                int(table_gps.row_values(each)[4])])
+                                int(table_gps.row_values(each)[4]),
+                                table_gps.row_values(each)[5]])
         except IOError:
             print('读取表错误!')
         return GPSList

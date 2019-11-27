@@ -1,11 +1,9 @@
 from jt808.message import attachUploadDataRate
 from src import body_data
-from jt808.tools import data_config
-import logging
+from jt808.tools import data_config, logs
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+log = logs.Log(data_config.PATH_LOG)
+logger = log.get_logger()
 
 
 class Send:
@@ -16,52 +14,50 @@ class Send:
         self.sim = sim
         self.tcp = tcp
         self.data = body_data.BodyData(sim)
-        print(('send body data:', self.data))
+        # logger.info(('send body data:', self.data))
         self.tcp.settimeout(30)
-        # self.filepath = config.ATTACH_PATH  # 附件路径
+
+    # 转格式发送
+    def sendBytes(self, data):
+        self.tcp.send(bytes.fromhex(data))
+        data_config.BYTES += len(bytes.fromhex(data))
 
     # 发送注册
     def sendReg(self):
         reg = self.data.register_0x0100(self.vID, self.dID)
-        print('发送注册消息 ', reg)
-        self.tcp.send(bytes.fromhex(reg))
-        data_config.BYTES += len(bytes.fromhex(reg))
-        print(self.tcp.getsockname(), self.vID + '上线了')
-        # logging.info(self.tcp.recv(1024))
-        # self.failLog('注册', reg)
+        logger.info('发送注册消息 %s' % reg)
+        self.sendBytes(reg)
+        logger.info((self.tcp.getsockname(), self.vID + '上线了'))
 
     # 发送鉴权
     def sendAut(self):
         aut = self.data.authentication_0x0102()
-        print('发送鉴权消息 ', aut)
-        self.tcp.send(bytes.fromhex(aut))
-        data_config.BYTES += len(bytes.fromhex(aut))
-        # logging.info(self.tcp.recv(1024))
-        # self.failLog('鉴权', aut)
+        logger.info('发送鉴权消息 %s' % aut)
+        self.sendBytes(aut)
 
     # 发送GPS
     def sendGPS(self, GPSList):
         gps = self.data.gpsInfo_0x0200(GPSList, self.dID)
-        print('发送GPS ', gps)
-        self.tcp.send(bytes.fromhex(gps))
-        data_config.BYTES += len(bytes.fromhex(gps))
-        # self.failLog('gps', gps)
+        logger.info('发送GPS %s' % gps)
+        self.sendBytes(gps)
 
     # 发送心跳
     def sendHeart(self):
         heart = self.data.heartbeat_0x0002()
-        print('发送心跳 ', heart)
-        self.tcp.send(bytes.fromhex(heart))
-        data_config.BYTES += len(bytes.fromhex(heart))
-        # logging.info(self.tcp.recv(1024))
-        # self.failLog('心跳', heart)
+        logger.info('发送心跳 %s' % heart)
+        self.sendBytes(heart)
 
     # 发送注销
     def sendLogout(self):
         out = self.data.logout_0x0003()
-        print('发送注销 ', out)
-        self.tcp.send(bytes.fromhex(out))
-        data_config.BYTES += len(bytes.fromhex(out))
+        logger.info('发送注销 %s' % out)
+        self.sendBytes(out)
+
+    # 发送终端通用应答
+    def sendClinetCommonReply(self):
+        reply = self.data.clinetCommonReply_0x0001()
+        logger.info('发送终端通用应答 %s' % reply)
+        self.sendBytes(reply)
 
 
 if __name__ == '__main__':

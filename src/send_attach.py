@@ -1,12 +1,9 @@
 from jt808.message import attachUploadDataRate
 from src import body_data
-from jt808.tools import data_config
-import logging
+from jt808.tools import data_config, logs
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
+log = logs.Log(data_config.PATH_LOG)
+logger = log.get_logger()
 
 # 苏标 上传报警附件信息
 
@@ -18,7 +15,7 @@ class SendAttach:
         self.tcp = tcp
         self.sim = sim
         self.data = body_data.BodyData(sim)
-        print(('send body data:', self.data))
+        logger.info(('send body data:', self.data))
         # self.filepath = config.ATTACH_PATH  # 附件路径
         self.tcp.settimeout(30)
 
@@ -26,24 +23,24 @@ class SendAttach:
 
     def sendAttMsg(self):
         attachMsg = self.data.attachMsg_0x1210(self.dID)
-        print('发送报警附件信息消息 ', attachMsg)
+        logger.info('发送报警附件信息消息 %s' % attachMsg)
         self.tcp.send(bytes.fromhex(attachMsg))
         data_config.BYTES += len(bytes.fromhex(attachMsg))
 
     # 发送文件信息上传
 
-    def sendAttUp(self, filepath, fileType):
-        attUpload = self.data.attachUpload_0x1211(filepath, fileType)
-        print('发送文件信息上传 ', attUpload)
+    def sendAttUp(self, filepath,fileType):
+        attUpload = self.data.attachUpload_0x1211(filepath,fileType)
+        logger.info('发送文件信息上传 %s' % attUpload)
         self.tcp.send(bytes.fromhex(attUpload))
         dataRate = attachUploadDataRate.AttachDataRate(filepath, self.tcp)
         dataRate.sendData()
         data_config.BYTES += len(bytes.fromhex(attUpload))
 
     # 文件上传完成消息
-    def sendAttEnd(self, filepath, fileType):
-        attFinish = self.data.attachUploadEnd_0x1212(filepath, fileType)
-        print('文件上传完成消息 ', attFinish)
+    def sendAttEnd(self, filepath,fileType):
+        attFinish = self.data.attachUploadEnd_0x1212(filepath,fileType)
+        logger.info('文件上传完成消息 %s' % attFinish)
         self.tcp.send(bytes.fromhex(attFinish))
         data_config.BYTES += len(bytes.fromhex(attFinish))
 

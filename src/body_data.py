@@ -6,11 +6,12 @@ from jt808.message import register_0x0100
 from jt808.message import join_data
 from jt808.message import gpsInfo_0x0200
 from jt808.message import commonReply_0x0001
-import os
-import sys
 
-CAR_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(CAR_PATH)
+
+# import os
+# import sys
+# CAR_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# sys.path.append(CAR_PATH)
 
 
 class BodyData:

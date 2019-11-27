@@ -1,3 +1,3 @@
-from src_syn import run_gui
+from src import run_gui
 
 run_gui.Gui()

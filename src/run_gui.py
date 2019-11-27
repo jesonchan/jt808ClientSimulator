@@ -2,7 +2,6 @@ from src import send_thread
 from jt808.tools import data_config
 import psutil
 from threading import Thread
-from threading import Event as threadEvent
 import time
 from tkinter import *
 
@@ -148,7 +147,6 @@ class Gui:
             thread.start()
             self.send = send_thread.SendThread(ip, int(port))
             self.send.startThread()
-
 
         # 点击stop按钮
         else:

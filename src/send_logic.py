@@ -1,15 +1,14 @@
 import time
-import os
-import sys
 from socket import *
-from src import send, send_attach_logic
-from jt808.tools import data_config
+from src import send
+from jt808.tools import data_config, tools, logs
 from src.excel_data import ExcelData
-from src.recv import Recv
+from src.recv import RecvLogic
+from threading import Thread, Event, current_thread
+from queue import Queue
 
-
-# PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# sys.path.append(PATH)
+log = logs.Log(data_config.PATH_LOG)
+logger = log.get_logger()
 
 
 class MainLogic:
@@ -20,23 +19,74 @@ class MainLogic:
         self.port = port
         self.path_gps = data_config.PATH_GPS
         self.socketInit()
+        self.t = tools.Tools()
+        self.rl = RecvLogic()
 
     def socketInit(self):
         try:
             self.tcp = socket(AF_INET, SOCK_STREAM)
             self.tcp.connect_ex((self.ip, self.port))
-            self.recv = Recv(self.tcp)
-            print('{}连接成功...'.format(self.tcp.getsockname()))
+            logger.info('{}连接成功...'.format(self.tcp.getsockname()))
         except BaseException:
-            print('无法连接！！！')
+            logger.info('无法连接！！！')
             return -1
 
         self.GPSList = self.ed.getGPSList(self.path_gps)
         self.regList = []
 
+    # 接收应答消息队列
+    def recv_queue(self, q):
+        while True:
+            q.put(self.tcp.recv(1024))
+
+    # send主流程
+    def run(self, each_car, e):
+        data_config.VEHICLE = each_car
+        self.reg_logic(e)
+        self.heart_logic(e)
+        self.GPS_logic(e)
+        data_config.TRAVEL_END = 1
+
+    # 终端应答流程
+    def client_response(self, response_q):
+        while True:
+            res = response_q.get()
+            if res == '8300':
+                self.sends.sendClinetCommonReply()
+            elif res == '9101':
+                self.sends.sendClinetCommonReply()
+
+    # 线程管理
+    def send_thread(self, each_car):
+        q = Queue()  # client消息接收队列
+        e = Event()
+        response_q = Queue()  # 终端应答队列
+        # thread_list = []
+        # send线程
+        thread_send = Thread(target=self.run, args=(each_car, e))
+        thread_send.start()
+        # recv队列线程
+        thread_recv_queue = Thread(
+            target=self.recv_queue, args=(q,))
+        thread_recv_queue.setDaemon(True)
+        thread_recv_queue.start()
+        # 读取recv线程
+        thread_recv = Thread(
+            target=self.rl.recv_logic, args=(q, e, response_q,))
+        thread_recv.setDaemon(True)
+        thread_recv.start()
+        # client应答线程
+        thread_recv = Thread(
+            target=self.client_response, args=(response_q,))
+        thread_recv.setDaemon(True)
+        thread_recv.start()
+        thread_send.join()
+        logger.info('主线程结束了！%s' % current_thread().name)
+
     # 注册逻辑
-    def reg_logic(self, each_car):
-        self.vehicleList = each_car
+
+    def reg_logic(self, e):
+        self.vehicleList = data_config.VEHICLE
         try:
             self.sends = send.Send(self.vehicleList[0],
                                    self.vehicleList[1],
@@ -45,100 +95,84 @@ class MainLogic:
             self.regList.append(self.sends)
             self.sends.sendReg()
             data_config.ONLINE += 1
-            result = self.recv.registerMsg()  # 接收消息
-            if result[0] == 0:
-                print('# ----------- 注册成功 ----------- #')
-                aut_code = result[1]  # 返回鉴权码
-                data_config.AUT = aut_code
-                print('返回鉴权码: ', aut_code)
+            if e.is_set() == False:  # 阻塞
+                logger.info('等待应答')
+                e.wait()
 
-                # 注册完成后要发送一次鉴权
-                print('# ----------- 发送鉴权 ----------- #')
-                self.sends.sendAut()
+            logger.info('# ----------- 发送鉴权 ----------- #')
+            self.sends.sendAut()
+            e.clear()
+            if e.is_set() == False:  # 阻塞
+                logger.info('等待应答')
+                e.wait()
 
-            else:
-                print('# ----------- 注册失败 ----------- #')
-                print('失败原因: ', result[1])
-                self.tcp.close()
-
-        except BaseException:
-            print('# ----------- 连接失败 ----------- #')
+        except BaseException as i:
+            logger.error(i)
+            logger.info('# ----------- 连接失败 ----------- #')
 
     # 心跳逻辑
     # 判断心跳应答结果，如果失败则发送鉴权
-    def heart_logic(self):
+    def heart_logic(self, e):
         try:
             self.sends.sendHeart()
-            result = self.recv.commonMsg()  # 接收消息
-            if result == 0:
-                print('# ----------- keep heart ----------- #')
-        except BaseException as e:
-            print(e)
-            print('# ----------- 发送鉴权 ----------- #')
+            e.clear()
+            if e.is_set() == False:  # 阻塞
+                logger.info('等待应答')
+                e.wait()
+            data_config.HEART += 1
+
+        except BaseException as i:
+            logger.error(i)
+            logger.info('# ----------- 发送鉴权 ----------- #')
             self.sends.sendAut()
 
     # GPS逻辑
-    def GPS_logic(self):
-        self.gpsIndex = 0
-        while self.gpsIndex < len(self.GPSList):
+    def GPS_logic(self, e):
+        gpsIndex = 0
+        while gpsIndex < len(self.GPSList):
             try:
-                print('# ----------- 发送GPS ----------- #')
-                print(self.GPSList[self.gpsIndex])
-                self.sends.sendGPS(self.GPSList[self.gpsIndex])
-                result = self.recv.commonMsg()  # 接收消息
-                time.sleep(1)
-                if result == 0:
-                    if data_config.IS_ATTACH == 1:
-                        upload_ip, upload_port = self.recv.uploadMsg()  # 接收消息
-                        print('# ----------- 发送附加信息 ----------- #')
-                        sa = send_attach_logic.AttachLogic(
-                            upload_ip, upload_port, self.vehicleList)
-                        sa.run()
+                logger.info('# ----------- 发送GPS ----------- #')
+                logger.info(self.GPSList[gpsIndex])
+                self.sends.sendGPS(self.GPSList[gpsIndex])
+
+                e.clear()
+                if e.is_set() == False:  # 阻塞
+                    logger.info('等待应答')
+                    e.wait()
                 data_config.GPS += 1
-                self.heart_logic()
-                data_config.HEART += 1
-                self.gpsIndex += 1
                 time.sleep(1)
-            except ConnectionAbortedError as e:
-                print(e)
-                print('正在尝试重新连接...')
+                self.heart_logic(e)
+                gpsIndex += 1
+
+            except ConnectionAbortedError as i:
+                logger.error(i)
+                logger.info('正在尝试重新连接...')
                 self.socketInit()
-                self.heart_logic()
+                self.heart_logic(e)
                 data_config.HEART += 1
         # 发送行程截止GPS，再次发送最后一个GPS定位，ACC关闭
-        data_config.STATE = '00000000000000100000100000000010' # ACC关闭
+        data_config.STATE = '00000000000000100000100000000010'  # ACC关闭
         self.sends.sendGPS(self.GPSList[-1])
-        print('# ----------- ACC关闭 ----------- #')
+        logger.info('# ----------- 行程结束ACC关闭 ----------- #')
 
         # self.sends.sendLogout()  # 注销逻辑无用
 
     # 断开连接
     def stop(self):
         # 发送行程截止GPS，再次发送最后一个GPS定位，ACC关闭
-        data_config.STATE = '00000000000000100000100000000010' # ACC关闭
+        data_config.STATE = '00000000000000100000100000000010'  # ACC关闭
         self.sends.sendGPS(self.GPSList[-1])
-        print('# ----------- ACC关闭 ----------- #')
         self.tcp.close()
-        print('# ----------- 停止程序 ----------- #')
-
+        logger.info('# ----------- 停止程序 ----------- #')
 
 
 if __name__ == '__main__':
     path_car = data_config.PATH_CAR
-    path_gps = data_config.PATH_GPS
-    t = MainLogic('192.168.1.192', 1077)
-    # t = MainLogic('sentryward.wxb.com.cn', 1077)  # 正式
-    print(t.GPSList)
     ed = ExcelData()
     carList = ed.getCarList(path_car)
     print(carList)
     each_car = carList[0]
-    print(len(t.GPSList))
-    # print(t.GPSList[-1])
-    t.reg_logic(each_car)
-    t.heart_logic()
-    t.GPS_logic()
-    t.tcp.close()
-    # ed = ExcelData()
-    # GPSList = ed.getGPSList(path_gps)
-    # print(GPSList)
+    # t = MainLogic('192.168.1.192', 1077)
+    t = MainLogic('carstest.wxb.com.cn', 1077)
+    # t = MainLogic('sentryward.wxb.com.cn', 1077)  # 正式
+    t.send_thread(each_car)
